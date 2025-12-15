@@ -1,0 +1,189 @@
+{
+  "dashboard": {
+    "title": "Worker Observability Dashboard (CP2 Wave 1)",
+    "tags": ["worker", "caf", "observability", "cp2"],
+    "timezone": "browser",
+    "refresh": "30s",
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "panels": [
+      {
+        "id": 1,
+        "title": "Step Execution Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(worker_step_executions_total[5m])",
+            "legendFormat": "{{step_type}} - {{execution_status}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Executions/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "title": "Step Execution Duration (p50/p95/p99)",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 0, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(worker_step_execution_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{step_type}} - p50",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(worker_step_execution_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{step_type}} - p95",
+            "refId": "B"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(worker_step_execution_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{step_type}} - p99",
+            "refId": "C"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration (seconds)"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Step Error Rate",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "rate(worker_step_errors_total[5m])",
+            "legendFormat": "{{step_type}} - {{error_code}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Errors/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Queue Depth by Resource Pool",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 8, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "worker_queue_depth",
+            "legendFormat": "{{resource_pool}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Queue Depth"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Active Tasks by Resource Pool",
+        "type": "graph",
+        "gridPos": {"x": 0, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "worker_active_tasks",
+            "legendFormat": "{{resource_pool}}",
+            "refId": "A"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Active Tasks"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Flow Execution Duration",
+        "type": "graph",
+        "gridPos": {"x": 12, "y": 16, "w": 12, "h": 8},
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(worker_flow_execution_duration_seconds_bucket[5m]))",
+            "legendFormat": "p95",
+            "refId": "A"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(worker_flow_execution_duration_seconds_bucket[5m]))",
+            "legendFormat": "p99",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration (seconds)"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Health Status",
+        "type": "stat",
+        "gridPos": {"x": 0, "y": 24, "w": 6, "h": 4},
+        "targets": [
+          {
+            "expr": "worker_health_status",
+            "legendFormat": "{{check}}",
+            "refId": "A"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area",
+          "justifyMode": "auto",
+          "orientation": "auto",
+          "reduceOptions": {
+            "values": false,
+            "calcs": ["lastNotNull"],
+            "fields": ""
+          }
+        },
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "mode": "absolute",
+              "steps": [
+                {"value": 0, "color": "red"},
+                {"value": 1, "color": "green"}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 8,
+        "title": "Step Success/Error Ratio",
+        "type": "graph",
+        "gridPos": {"x": 6, "y": 24, "w": 18, "h": 8},
+        "targets": [
+          {
+            "expr": "sum(rate(worker_step_executions_total{execution_status=\"success\"}[5m])) by (step_type)",
+            "legendFormat": "{{step_type}} - success",
+            "refId": "A"
+          },
+          {
+            "expr": "sum(rate(worker_step_executions_total{execution_status=\"error\"}[5m])) by (step_type)",
+            "legendFormat": "{{step_type}} - error",
+            "refId": "B"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Executions/sec"},
+          {"format": "short"}
+        ]
+      }
+    ]
+  }
+}
+

@@ -1,0 +1,109 @@
+groups:
+  - name: worker_alerts
+    interval: 30s
+    rules:
+      # High Task Error Rate
+      - alert: WorkerHighTaskErrorRate
+        expr: |
+          sum(rate(worker_step_errors_total[5m])) by (step_type)
+          /
+          sum(rate(worker_step_executions_total[5m])) by (step_type)
+          > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "High task error rate detected in Worker"
+          description: "Worker step error rate is {{ $value | humanizePercentage }} for step_type={{ $labels.step_type }} (threshold: 10%)"
+      
+      # High Task Latency (p95)
+      - alert: WorkerHighTaskLatency
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(worker_step_execution_duration_seconds_bucket[5m])) by (le, step_type)
+          ) > 2.0
+        for: 5m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "High task latency detected in Worker"
+          description: "95th percentile task latency is {{ $value | humanizeDuration }} for step_type={{ $labels.step_type }} (threshold: 2s)"
+      
+      # High Task Latency (p99)
+      - alert: WorkerVeryHighTaskLatency
+        expr: |
+          histogram_quantile(0.99, 
+            sum(rate(worker_step_execution_duration_seconds_bucket[5m])) by (le, step_type)
+          ) > 5.0
+        for: 5m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Very high task latency detected in Worker"
+          description: "99th percentile task latency is {{ $value | humanizeDuration }} for step_type={{ $labels.step_type }} (threshold: 5s)"
+      
+      # High Queue Depth
+      - alert: WorkerHighQueueDepth
+        expr: |
+          worker_queue_depth > 100
+        for: 5m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "High queue depth detected in Worker"
+          description: "Queue depth is {{ $value }} for resource_pool={{ $labels.resource_pool }} (threshold: 100)"
+      
+      # Queue Depth Critical
+      - alert: WorkerCriticalQueueDepth
+        expr: |
+          worker_queue_depth > 500
+        for: 2m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Critical queue depth detected in Worker"
+          description: "Queue depth is {{ $value }} for resource_pool={{ $labels.resource_pool }} (threshold: 500)"
+      
+      # Worker Unhealthy
+      - alert: WorkerUnhealthy
+        expr: |
+          worker_health_status == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: worker
+        annotations:
+          summary: "Worker is unhealthy"
+          description: "Worker health check is failing for check={{ $labels.check }}"
+      
+      # High Active Tasks
+      - alert: WorkerHighActiveTasks
+        expr: |
+          worker_active_tasks > 50
+        for: 5m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "High number of active tasks in Worker"
+          description: "Active tasks count is {{ $value }} for resource_pool={{ $labels.resource_pool }} (threshold: 50)"
+      
+      # High Flow Execution Duration
+      - alert: WorkerHighFlowExecutionDuration
+        expr: |
+          histogram_quantile(0.95, 
+            sum(rate(worker_flow_execution_duration_seconds_bucket[5m])) by (le)
+          ) > 30.0
+        for: 5m
+        labels:
+          severity: warning
+          component: worker
+        annotations:
+          summary: "High flow execution duration detected in Worker"
+          description: "95th percentile flow execution duration is {{ $value | humanizeDuration }} (threshold: 30s)"
+
