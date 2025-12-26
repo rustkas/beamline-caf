@@ -120,6 +120,7 @@ private:
     }
     
     void mock_http_request(const StepRequest& request, StepResult& result) {
+        (void)request; // Mark as used
         result.outputs["status_code"] = "200";
         result.outputs["body"] = R"({"message": "Mock HTTP response", "timestamp": ")" + 
                                   std::to_string(std::chrono::system_clock::now().time_since_epoch().count()) + "}";
@@ -189,6 +190,7 @@ private:
     }
     
     void mock_human_approval(const StepRequest& request, StepResult& result) {
+        (void)request; // Mark as used
         result.outputs["approval_id"] = "mock_approval_" + std::to_string(rng_() % 10000);
         result.outputs["status"] = "approved";
         result.outputs["decision"] = "approved";

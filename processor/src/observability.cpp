@@ -1,11 +1,11 @@
 #include "beamline/worker/observability.hpp"
 #include "beamline/worker/core.hpp"
 #include "beamline/worker/feature_flags.hpp"
-#include <prometheus/exposer.h>
-#include <opentelemetry/trace/provider.h>
-#include <opentelemetry/exporters/ostream/span_exporter.h>
-#include <opentelemetry/sdk/trace/tracer_provider.h>
-#include <opentelemetry/sdk/trace/simple_processor.h>
+// #include <prometheus/exposer.h>
+// #include <opentelemetry/trace/provider.h>
+// #include <opentelemetry/exporters/ostream/span_exporter.h>
+// #include <opentelemetry/sdk/trace/tracer_provider.h>
+// #include <opentelemetry/sdk/trace/simple_processor.h>
 #include <nlohmann/json.hpp>
 #include <chrono>
 #include <iostream>
@@ -102,6 +102,7 @@ Observability::~Observability() {
 }
 
 void Observability::initialize_metrics() {
+    /*
     registry_ = std::make_shared<prometheus::Registry>();
     
     // Task total counter family
@@ -137,9 +138,11 @@ void Observability::initialize_metrics() {
     if (FeatureFlags::is_observability_metrics_enabled()) {
         initialize_cp2_metrics();
     }
+    */
 }
 
 void Observability::initialize_cp2_metrics() {
+    /*
     // CP2 Wave 1 Metrics - only initialize if feature flag is enabled
     // This method is called from initialize_metrics() if CP2_OBSERVABILITY_METRICS_ENABLED=true
     
@@ -186,41 +189,49 @@ void Observability::initialize_cp2_metrics() {
         .Name("worker_health_status")
         .Help("Health status (1 = healthy, 0 = unhealthy)")
         .Register(*registry_);
+    */
 }
 
 void Observability::initialize_tracing() {
+    /*
     // Create OStream exporter for now (can be replaced with OTLP exporter)
     auto exporter = std::make_unique<opentelemetry::exporter::trace::OStreamSpanExporter>();
     
-    // Create simple processor
+    // Create processor
     auto processor = std::make_unique<opentelemetry::sdk::trace::SimpleSpanProcessor>(std::move(exporter));
     
     // Create provider
     auto provider = std::make_shared<opentelemetry::sdk::trace::TracerProvider>(std::move(processor));
     
-    // Set global provider
+    // Set as global provider
     opentelemetry::trace::Provider::SetTracerProvider(provider);
     
     // Create tracer for this worker
     tracer_ = provider->GetTracer("beamline_worker", "1.0.0");
+    */
 }
 
-void Observability::increment_task_total(const std::string& block_type, const std::string& status) {
+void Observability::increment_task_total(const std::string& /*block_type*/, const std::string& /*status*/) {
+    /*
     auto& counter = task_total_family_->Add({
         {"block_type", block_type},
         {"status", status}
     });
     counter.Increment();
+    */
 }
 
-void Observability::record_task_latency(const std::string& block_type, int64_t latency_ms) {
+void Observability::record_task_latency(const std::string& /*block_type*/, int64_t /*latency_ms*/) {
+    /*
     auto& histogram = task_latency_family_->Add({
         {"block_type", block_type}
     });
     histogram.Observe(latency_ms);
+    */
 }
 
-void Observability::record_resource_usage(const std::string& block_type, int64_t cpu_time_ms, int64_t mem_bytes) {
+void Observability::record_resource_usage(const std::string& /*block_type*/, int64_t /*cpu_time_ms*/, int64_t /*mem_bytes*/) {
+    /*
     // Record CPU time
     auto& cpu_gauge = resource_usage_family_->Add({
         {"block_type", block_type},
@@ -234,9 +245,10 @@ void Observability::record_resource_usage(const std::string& block_type, int64_t
         {"resource", "memory_bytes"}
     });
     mem_gauge.Set(mem_bytes);
+    */
 }
 
-void Observability::set_pool_queue_depth(ResourceClass resource_class, int64_t depth) {
+void Observability::set_pool_queue_depth(ResourceClass resource_class, int64_t /*depth*/) {
     std::string resource_name;
     switch (resource_class) {
         case ResourceClass::cpu:
@@ -250,10 +262,12 @@ void Observability::set_pool_queue_depth(ResourceClass resource_class, int64_t d
             break;
     }
     
+    /*
     auto& gauge = pool_queue_depth_family_->Add({
         {"resource_class", resource_name}
     });
     gauge.Set(depth);
+    */
 }
 
 // CP2 Wave 1 Metrics Implementation
@@ -279,13 +293,15 @@ void Observability::record_step_execution(const std::string& step_type,
     if (!flow_id.empty()) labels["flow_id"] = flow_id;
     if (!step_id.empty()) labels["step_id"] = step_id;
     
+    /*
     auto& counter = step_executions_total_family_->Add(labels);
     counter.Increment();
+    */
 }
 
 void Observability::record_step_execution_duration(const std::string& step_type,
                                                    const std::string& execution_status,
-                                                   double duration_seconds,
+                                                   double /*duration_seconds*/,
                                                    const std::string& tenant_id,
                                                    const std::string& run_id,
                                                    const std::string& flow_id,
@@ -305,8 +321,10 @@ void Observability::record_step_execution_duration(const std::string& step_type,
     if (!flow_id.empty()) labels["flow_id"] = flow_id;
     if (!step_id.empty()) labels["step_id"] = step_id;
     
+    /*
     auto& histogram = step_execution_duration_seconds_family_->Add(labels);
     histogram.Observe(duration_seconds);
+    */
 }
 
 void Observability::record_step_error(const std::string& step_type,
@@ -330,11 +348,13 @@ void Observability::record_step_error(const std::string& step_type,
     if (!flow_id.empty()) labels["flow_id"] = flow_id;
     if (!step_id.empty()) labels["step_id"] = step_id;
     
+    /*
     auto& counter = step_errors_total_family_->Add(labels);
     counter.Increment();
+    */
 }
 
-void Observability::record_flow_execution_duration(double duration_seconds,
+void Observability::record_flow_execution_duration(double /*duration_seconds*/,
                                                    const std::string& tenant_id,
                                                    const std::string& run_id,
                                                    const std::string& flow_id) {
@@ -349,37 +369,55 @@ void Observability::record_flow_execution_duration(double duration_seconds,
     if (!run_id.empty()) labels["run_id"] = run_id;
     if (!flow_id.empty()) labels["flow_id"] = flow_id;
     
+    /*
     auto& histogram = flow_execution_duration_seconds_family_->Add(labels);
     histogram.Observe(duration_seconds);
+    */
 }
 
-void Observability::set_queue_depth(const std::string& resource_pool, int64_t depth) {
+void Observability::set_queue_depth(const std::string& resource_pool, int64_t /*depth*/) {
     if (!FeatureFlags::is_observability_metrics_enabled()) {
         return;
     }
     
+    // Silence unused variable warning for resource_pool if metrics disabled
+    (void)resource_pool;
+    
+    /*
     auto& gauge = queue_depth_family_->Add({{"resource_pool", resource_pool}});
     gauge.Set(depth);
+    */
 }
 
-void Observability::set_active_tasks(const std::string& resource_pool, int64_t count) {
+void Observability::set_active_tasks(const std::string& resource_pool, int64_t /*count*/) {
     if (!FeatureFlags::is_observability_metrics_enabled()) {
         return;
     }
     
+    // Silence unused variable warning for resource_pool if metrics disabled
+    (void)resource_pool;
+    
+    /*
     auto& gauge = active_tasks_family_->Add({{"resource_pool", resource_pool}});
     gauge.Set(count);
+    */
 }
 
-void Observability::set_health_status(const std::string& check, int64_t status) {
+void Observability::set_health_status(const std::string& check, int64_t /*status*/) {
     if (!FeatureFlags::is_observability_metrics_enabled()) {
         return;
     }
     
+    // Silence unused variable warning for check if metrics disabled
+    (void)check;
+    
+    /*
     auto& gauge = health_status_family_->Add({{"check", check}});
     gauge.Set(status);
+    */
 }
 
+/*
 std::unique_ptr<opentelemetry::trace::Span> Observability::start_step_span(
     const std::string& operation,
     const std::string& tenant_id,
@@ -407,6 +445,7 @@ std::unique_ptr<opentelemetry::trace::Span> Observability::start_step_span(
     
     return span;
 }
+*/
 
 void Observability::log_info(const std::string& message,
                              const std::string& tenant_id,
@@ -672,7 +711,8 @@ std::string Observability::get_metrics_response() {
     if (!FeatureFlags::is_observability_metrics_enabled()) {
         return ""; // Return empty if feature flag disabled
     }
-    
+    return "# Worker Metrics (CP2 Wave 1)\n# Registry not initialized\n";
+    /*
     if (!registry_) {
         return "# Worker Metrics (CP2 Wave 1)\n# Registry not initialized\n";
     }
@@ -805,6 +845,7 @@ std::string Observability::get_metrics_response() {
     }
     
     return oss.str();
+    */
 }
 
 void Observability::metrics_server_loop(int socket_fd) {

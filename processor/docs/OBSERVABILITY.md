@@ -2,7 +2,7 @@
 
 This document describes the observability features for Worker CAF in CP1, including structured JSON logging and health endpoints.
 
-CP2/Pre‑release adds OpenTelemetry tracing (OTLP export), Prometheus `/metrics` on 9092, and Grafana dashboards leveraging CP1 correlation fields for filtering. See `docs/dev/CP2_OBSERVABILITY_PLAN.md` and `docs/OBSERVABILITY_CP2_TEST_PROFILE.md`.
+CP2/Pre‑release adds OpenTelemetry tracing (OTLP export), Prometheus `/metrics` on 9092, and Grafana dashboards leveraging CP1 correlation fields for filtering. See `docs/archive/dev/CP2_OBSERVABILITY_PLAN.md` and `docs/OBSERVABILITY_CP2_TEST_PROFILE.md`.
 
 ## Structured JSON Logging
 

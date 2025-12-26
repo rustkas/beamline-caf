@@ -101,5 +101,7 @@ int main(int argc, char** argv) {
     }
     
     // Run the worker
-    return caf::exec_main<caf::id_block::io>(caf_main, config);
+    caf::actor_system system{config};
+    caf_main(system, config);
+    return 0;
 }

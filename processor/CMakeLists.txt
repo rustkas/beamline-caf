@@ -9,7 +9,13 @@ find_package(Threads REQUIRED)
 find_package(PkgConfig REQUIRED)
 
 # CAF (C++ Actor Framework)
-pkg_check_modules(CAF REQUIRED libcaf_core libcaf_io)
+find_library(CAF_CORE_LIB caf_core REQUIRED)
+find_library(CAF_IO_LIB caf_io REQUIRED)
+find_library(CAF_OPENSSL_LIB caf_openssl)
+
+find_path(CAF_INCLUDE_DIR caf/actor_system.hpp REQUIRED)
+
+include_directories(${CAF_INCLUDE_DIR})
 
 # Optional packages for blocks
 pkg_check_modules(CURL libcurl)
@@ -49,9 +55,14 @@ add_executable(beamline_worker ${SOURCES})
 
 # Link libraries
 target_link_libraries(beamline_worker
-    ${CAF_LIBRARIES}
+    ${CAF_CORE_LIB}
+    ${CAF_IO_LIB}
     ${CMAKE_THREAD_LIBS_INIT}
 )
+
+if(CAF_OPENSSL_LIB)
+    target_link_libraries(beamline_worker ${CAF_OPENSSL_LIB})
+endif()
 
 if(CURL_FOUND)
     target_link_libraries(beamline_worker ${CURL_LIBRARIES})
@@ -63,7 +74,6 @@ endif()
 
 # Enhanced compiler flags for better code quality
 target_compile_options(beamline_worker PRIVATE
-    ${CAF_CFLAGS_OTHER}
     -Wall -Wextra -Werror
     -Wpedantic -Wmissing-declarations
     -Wshadow -Wpointer-arith -Wcast-align

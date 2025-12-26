@@ -1,11 +1,13 @@
 #pragma once
 
 #include "beamline/worker/core.hpp"
+#include "beamline/worker/observability.hpp"
 #include <caf/actor.hpp>
 #include <caf/actor_system.hpp>
 #include <caf/event_based_actor.hpp>
 #include <caf/typed_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
+#include <queue>
 
 namespace beamline {
 namespace worker {
@@ -21,9 +23,9 @@ using worker_actor = caf::typed_actor<
 // Worker actor state
 class WorkerActorState {
 public:
-    WorkerActorState(caf::actor_system& system, const WorkerConfig& config);
+    WorkerActorState(caf::scheduled_actor* self, WorkerConfig config);
     
-    caf::behavior make_behavior();
+    worker_actor::behavior_type make_behavior();
     
 private:
     caf::actor_system& system_;
@@ -37,7 +39,30 @@ private:
     caf::actor get_pool_for_resource(ResourceClass resource_class);
 };
 
-using WorkerActor = worker_actor::stateful_impl<WorkerActorState>;
+class WorkerActorImpl : public caf::typed_event_based_actor<
+    caf::reacts_to<caf::atom_value, StepRequest>,
+    caf::reacts_to<caf::atom_value, std::string>,
+    caf::reacts_to<caf::atom_value>,
+    caf::reacts_to<caf::atom_value, BlockContext>
+> {
+public:
+    WorkerActorImpl(caf::actor_config& cfg, WorkerConfig config)
+        : caf::typed_event_based_actor<
+            caf::reacts_to<caf::atom_value, StepRequest>,
+            caf::reacts_to<caf::atom_value, std::string>,
+            caf::reacts_to<caf::atom_value>,
+            caf::reacts_to<caf::atom_value, BlockContext>
+          >(cfg),
+          state_(this, std::move(config)) {}
+
+    behavior_type make_behavior() override {
+        return state_.make_behavior();
+    }
+private:
+    WorkerActorState state_;
+};
+
+using WorkerActor = WorkerActorImpl;
 
 // Pool actor for resource management
 using pool_actor = caf::typed_actor<
@@ -46,11 +71,21 @@ using pool_actor = caf::typed_actor<
     caf::reacts_to<caf::atom_value> // get pool metrics
 >;
 
+struct PoolConfig {
+    ResourceClass resource_class;
+    int max_concurrency;
+    
+    template <class Inspector>
+    friend typename Inspector::result_type inspect(Inspector& f, PoolConfig& config) {
+        return f(config.resource_class, config.max_concurrency);
+    }
+};
+
 class PoolActorState {
 public:
-    PoolActorState(caf::actor_system& system, ResourceClass resource_class, int max_concurrency);
+    PoolActorState(caf::scheduled_actor* self, PoolConfig config);
     
-    caf::behavior make_behavior();
+    pool_actor::behavior_type make_behavior();
     
 private:
     caf::actor_system& system_;
@@ -66,7 +101,26 @@ private:
     void update_queue_metrics(); // CP2: Update queue depth and active tasks metrics
 };
 
-using PoolActorImpl = pool_actor::stateful_impl<PoolActorState>;
+class PoolActorImpl : public caf::typed_event_based_actor<
+    caf::reacts_to<caf::atom_value, StepRequest>,
+    caf::reacts_to<caf::atom_value, std::string>,
+    caf::reacts_to<caf::atom_value>
+> {
+public:
+    PoolActorImpl(caf::actor_config& cfg, PoolConfig config)
+        : caf::typed_event_based_actor<
+            caf::reacts_to<caf::atom_value, StepRequest>,
+            caf::reacts_to<caf::atom_value, std::string>,
+            caf::reacts_to<caf::atom_value>
+          >(cfg),
+          state_(this, std::move(config)) {}
+
+    behavior_type make_behavior() override {
+        return state_.make_behavior();
+    }
+private:
+    PoolActorState state_;
+};
 
 // Block executor actor
 using executor_actor = caf::typed_actor<
@@ -77,9 +131,9 @@ using executor_actor = caf::typed_actor<
 
 class ExecutorActorState {
 public:
-    ExecutorActorState(caf::actor_system& system, std::shared_ptr<BlockExecutor> executor);
+    ExecutorActorState(caf::scheduled_actor* self, std::shared_ptr<BlockExecutor> executor);
     
-    caf::behavior make_behavior();
+    executor_actor::behavior_type make_behavior();
     
 private:
     caf::actor_system& system_;
@@ -92,7 +146,26 @@ private:
     void record_step_metrics(const StepRequest& req, const StepResult& result, double duration_seconds); // CP2: Record metrics
 };
 
-using ExecutorActorImpl = executor_actor::stateful_impl<ExecutorActorState>;
+class ExecutorActorImpl : public caf::typed_event_based_actor<
+    caf::reacts_to<caf::atom_value, StepRequest>,
+    caf::reacts_to<caf::atom_value, std::string>,
+    caf::reacts_to<caf::atom_value>
+> {
+public:
+    ExecutorActorImpl(caf::actor_config& cfg, std::shared_ptr<BlockExecutor> executor)
+        : caf::typed_event_based_actor<
+            caf::reacts_to<caf::atom_value, StepRequest>,
+            caf::reacts_to<caf::atom_value, std::string>,
+            caf::reacts_to<caf::atom_value>
+          >(cfg),
+          state_(this, std::move(executor)) {}
+          
+    behavior_type make_behavior() override {
+        return state_.make_behavior();
+    }
+private:
+    ExecutorActorState state_;
+};
 
 } // namespace worker
 } // namespace beamline

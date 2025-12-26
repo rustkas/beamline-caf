@@ -50,15 +50,8 @@ struct StepRequest {
     std::unordered_map<std::string, std::string> guardrails;
     
     template <class Inspector>
-    friend bool inspect(Inspector& f, StepRequest& req) {
-        return f.object(req).fields(
-            f.field("type", req.type),
-            f.field("inputs", req.inputs),
-            f.field("resources", req.resources),
-            f.field("timeout_ms", req.timeout_ms),
-            f.field("retry_count", req.retry_count),
-            f.field("guardrails", req.guardrails)
-        );
+    friend typename Inspector::result_type inspect(Inspector& f, StepRequest& req) {
+        return f(req.type, req.inputs, req.resources, req.timeout_ms, req.retry_count, req.guardrails);
     }
 };
 
@@ -175,16 +168,8 @@ struct StepResult {
     }
     
     template <class Inspector>
-    friend bool inspect(Inspector& f, StepResult& result) {
-        return f.object(result).fields(
-            f.field("status", result.status),
-            f.field("error_code", result.error_code),
-            f.field("outputs", result.outputs),
-            f.field("error_message", result.error_message),
-            f.field("metadata", result.metadata),
-            f.field("latency_ms", result.latency_ms),
-            f.field("retries_used", result.retries_used)
-        );
+    friend typename Inspector::result_type inspect(Inspector& f, StepResult& result) {
+        return f(result.status, result.error_code, result.outputs, result.error_message, result.metadata, result.latency_ms, result.retries_used);
     }
 };
 
@@ -264,17 +249,8 @@ struct WorkerConfig {
     std::string prometheus_endpoint = "0.0.0.0:9090";
     
     template <class Inspector>
-    friend bool inspect(Inspector& f, WorkerConfig& config) {
-        return f.object(config).fields(
-            f.field("cpu_pool_size", config.cpu_pool_size),
-            f.field("gpu_pool_size", config.gpu_pool_size),
-            f.field("io_pool_size", config.io_pool_size),
-            f.field("max_memory_per_tenant_mb", config.max_memory_per_tenant_mb),
-            f.field("max_cpu_time_per_tenant_ms", config.max_cpu_time_per_tenant_ms),
-            f.field("sandbox_mode", config.sandbox_mode),
-            f.field("nats_url", config.nats_url),
-            f.field("prometheus_endpoint", config.prometheus_endpoint)
-        );
+    friend typename Inspector::result_type inspect(Inspector& f, WorkerConfig& config) {
+        return f(config.cpu_pool_size, config.gpu_pool_size, config.io_pool_size, config.max_memory_per_tenant_mb, config.max_cpu_time_per_tenant_ms, config.sandbox_mode, config.nats_url, config.prometheus_endpoint);
     }
 };
 

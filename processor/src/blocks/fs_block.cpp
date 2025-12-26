@@ -1,4 +1,5 @@
 #include "beamline/worker/core.hpp"
+#include "beamline/worker/base_block_executor.hpp"
 #include "beamline/worker/timeout_enforcement.hpp"
 #include "beamline/worker/feature_flags.hpp"
 #include <fstream>
@@ -99,7 +100,7 @@ public:
                     throw std::runtime_error("Failed to open file for writing: " + path);
                 }
                 
-                file.write(content.data(), content.size());
+                file.write(content.data(), static_cast<std::streamsize>(content.size()));
                 file.close();
             }
             
@@ -111,7 +112,7 @@ public:
             outputs["size"] = std::to_string(content.size());
             outputs["created"] = std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
             
-            record_success(latency_ms, 0, content.size());
+            record_success(latency_ms, 0, static_cast<int64_t>(content.size()));
             return StepResult::success(metadata, outputs, latency_ms);
             
         } catch (const std::exception& e) {
@@ -249,7 +250,7 @@ public:
                 file_size = file.tellg();
                 file.seekg(0, std::ios::beg);
                 
-                content.resize(file_size);
+                content.resize(static_cast<size_t>(file_size));
                 file.read(content.data(), file_size);
                 file.close();
             }

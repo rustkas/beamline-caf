@@ -136,14 +136,14 @@ void test_mock_executor() {
     ctx.trace_id = "test_trace";
     
     auto init_result = executor.init(ctx);
-    assert(init_result.has_value());
+    assert(init_result);
     
     StepRequest req;
     req.type = "test.block";
     req.inputs["test_input"] = "test_value";
     
     auto execute_result = executor.execute(req);
-    assert(execute_result.has_value());
+    assert(execute_result);
     assert(execute_result->status == StepStatus::ok);
     assert(execute_result->outputs["mock_result"] == "success");
     assert(execute_result->outputs["block_type"] == "test.block");
@@ -166,7 +166,7 @@ void test_step_execution_with_retry() {
     req.timeout_ms = 1000;
     
     auto result = executor.execute(req);
-    assert(result.has_value());
+    assert(result);
     assert(result->status == StepStatus::ok);
     assert(result->retries_used == 0); // No retries needed for mock executor
     
@@ -208,8 +208,8 @@ void test_block_context_isolation() {
     auto init1 = executor1.init(ctx1);
     auto init2 = executor2.init(ctx2);
     
-    assert(init1.has_value());
-    assert(init2.has_value());
+    assert(init1);
+    assert(init2);
     
     // Both executors should have different contexts
     // (This is a basic test - in a real implementation we'd verify isolation more thoroughly)
@@ -245,7 +245,7 @@ void test_contract_metadata_always_present() {
     req.type = "contract.test";
     
     auto result = executor.execute(req, ctx);
-    assert(result.has_value());
+    assert(result);
     
     // CONTRACT: Metadata must always be present
     assert(!result->metadata.trace_id.empty());
@@ -295,9 +295,9 @@ void test_contract_idempotency() {
     auto result2 = executor.execute(req, ctx);
     auto result3 = executor.execute(req, ctx);
     
-    assert(result1.has_value());
-    assert(result2.has_value());
-    assert(result3.has_value());
+    assert(result1);
+    assert(result2);
+    assert(result3);
     
     // CONTRACT: All executions should succeed (idempotent)
     assert(result1->status == StepStatus::ok);
@@ -336,7 +336,7 @@ void test_contract_timing_guarantees() {
     auto result = executor.execute(req, ctx);
     auto end = std::chrono::steady_clock::now();
     
-    assert(result.has_value());
+    assert(result);
     
     auto actual_time = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
     
@@ -365,7 +365,7 @@ void test_happy_path_basic_execution() {
     ctx.step_id = "step_001";
     
     auto init_result = executor.init(ctx);
-    assert(init_result.has_value());
+    assert(init_result);
     
     StepRequest req;
     req.type = "happy.basic";
@@ -375,7 +375,7 @@ void test_happy_path_basic_execution() {
     req.retry_count = 3;
     
     auto result = executor.execute(req, ctx);
-    assert(result.has_value());
+    assert(result);
     assert(result->status == StepStatus::ok);
     assert(result->error_code == ErrorCode::none);
     assert(result->outputs.find("mock_result") != result->outputs.end());
@@ -404,7 +404,7 @@ void test_happy_path_with_large_payload() {
     req.inputs["size"] = std::to_string(large_payload.size());
     
     auto result = executor.execute(req, ctx);
-    assert(result.has_value());
+    assert(result);
     assert(result->status == StepStatus::ok);
     
     std::cout << "✓ Happy path: large payload test passed" << std::endl;
@@ -427,7 +427,7 @@ void test_happy_path_with_retries() {
     req.timeout_ms = 1000;
     
     auto result = executor.execute(req, ctx);
-    assert(result.has_value());
+    assert(result);
     assert(result->status == StepStatus::ok);
     assert(result->retries_used >= 0);
     assert(result->retries_used <= req.retry_count);
@@ -458,7 +458,7 @@ void test_error_network_failure() {
     req.inputs["url"] = "https://unreachable.example.com";
     
     auto result = executor.execute(req, ctx);
-    assert(result.has_value());
+    assert(result);
     
     // CONTRACT: Error result must have complete metadata
     assert(!result->metadata.trace_id.empty());
@@ -493,7 +493,7 @@ void test_error_file_operation_failure() {
     req.inputs["operation"] = "read";
     
     auto result = executor.execute(req, ctx);
-    assert(result.has_value());
+    assert(result);
     
     // CONTRACT: Error result must have complete metadata
     assert(!result->metadata.trace_id.empty());
@@ -525,7 +525,7 @@ void test_error_timeout() {
     req.timeout_ms = 500; // Short timeout
     
     auto result = executor.execute(req, ctx);
-    assert(result.has_value());
+    assert(result);
     
     // CONTRACT: Timeout result must have complete metadata
     assert(!result->metadata.trace_id.empty());
@@ -562,7 +562,7 @@ void test_error_invalid_parameters() {
     executor.set_should_fail(true);
     
     auto result = executor.execute(req, ctx);
-    assert(result.has_value());
+    assert(result);
     
     // CONTRACT: Error result must have complete metadata
     assert(!result->metadata.trace_id.empty());
@@ -601,7 +601,7 @@ void test_boundary_many_small_tasks() {
         req.timeout_ms = 100;
         
         auto result = executor.execute(req, ctx);
-        if (result.has_value() && result->status == StepStatus::ok) {
+        if (result && result->status == StepStatus::ok) {
             success_count++;
             
             // CONTRACT: Every successful result must have complete metadata
@@ -642,7 +642,7 @@ void test_boundary_large_payload() {
     req.timeout_ms = 30000; // 30 seconds
     
     auto result = executor.execute(req, ctx);
-    assert(result.has_value());
+    assert(result);
     
     // CONTRACT: Even with large payload, result must have complete metadata
     assert(!result->metadata.trace_id.empty());
@@ -679,7 +679,7 @@ void test_boundary_concurrent_executions() {
             req.timeout_ms = 1000;
             
             auto result = executor.execute(req, ctx);
-            results[i] = (result.has_value() && result->status == StepStatus::ok);
+            results[i] = (result && result->status == StepStatus::ok);
         });
     }
     

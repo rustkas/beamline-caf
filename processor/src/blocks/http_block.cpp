@@ -1,12 +1,15 @@
 #include "beamline/worker/core.hpp"
+#include "beamline/worker/base_block_executor.hpp"
 #include "beamline/worker/timeout_enforcement.hpp"
 #include "beamline/worker/feature_flags.hpp"
 #include <curl/curl.h>
-#include <json/json.h>
+#include <nlohmann/json.hpp>
 #include <chrono>
 
 namespace beamline {
 namespace worker {
+
+using json = nlohmann::json;
 
 class HttpBlockExecutor : public BaseBlockExecutor {
 public:
@@ -38,19 +41,17 @@ public:
         
         try {
             // Parse headers
-            Json::Value headers;
-            Json::CharReaderBuilder builder;
-            std::string errs;
-            std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-            
-            if (!reader->parse(headers_json.c_str(), headers_json.c_str() + headers_json.size(), &headers, &errs)) {
+            json headers;
+            try {
+                headers = json::parse(headers_json);
+            } catch (const json::parse_error& e) {
                 auto end_time = std::chrono::steady_clock::now();
                 auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
                 record_error(latency_ms);
                 
                 return StepResult::error_result(
                     ErrorCode::invalid_format,
-                    "Invalid headers JSON: " + errs,
+                    "Invalid headers JSON: " + std::string(e.what()),
                     metadata,
                     latency_ms
                 );
@@ -108,7 +109,7 @@ private:
     };
     
     HttpResponse perform_http_request(const std::string& url, const std::string& method, 
-                                     const std::string& body, const Json::Value& headers, 
+                                     const std::string& body, const json& headers, 
                                      int64_t timeout_ms) {
         CURL* curl = curl_easy_init();
         if (!curl) {
@@ -159,8 +160,14 @@ private:
         
         // Set headers
         struct curl_slist* header_list = nullptr;
-        for (const auto& key : headers.getMemberNames()) {
-            std::string header = key + ": " + headers[key].asString();
+        for (auto& [key, value] : headers.items()) {
+            std::string value_str;
+            if (value.is_string()) {
+                value_str = value.get<std::string>();
+            } else {
+                value_str = value.dump();
+            }
+            std::string header = key + ": " + value_str;
             header_list = curl_slist_append(header_list, header.c_str());
         }
         if (header_list) {

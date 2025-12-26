@@ -1,5 +1,6 @@
 #include "beamline/worker/core.hpp"
 #include "beamline/worker/actors.hpp"
+#include <caf/send.hpp>
 #include <unordered_map>
 #include <memory>
 
@@ -36,7 +37,8 @@ public:
         // Broadcast cancel to all pools - they'll handle the specific step cancellation
         // Context parameter is part of the interface but not used in this implementation
         for (auto& pool_pair : resource_pools_) {
-            system_.send(pool_pair.second, caf::atom("cancel"), step_id);
+            // system_.send(pool_pair.second, caf::atom("cancel"), step_id);
+             caf::anon_send(pool_pair.second, caf::atom("cancel"), step_id);
         }
         return caf::unit;
     }
@@ -59,13 +61,16 @@ private:
     
     void initialize_resource_pools() {
         // Create CPU pool
-        resource_pools_["cpu"] = system_.spawn<PoolActorImpl>(ResourceClass::cpu, config_.cpu_pool_size);
+        PoolConfig cpu_config{ResourceClass::cpu, config_.cpu_pool_size};
+        resource_pools_["cpu"] = caf::actor_cast<caf::actor>(system_.spawn<PoolActorImpl>(cpu_config));
         
         // Create GPU pool
-        resource_pools_["gpu"] = system_.spawn<PoolActorImpl>(ResourceClass::gpu, config_.gpu_pool_size);
+        PoolConfig gpu_config{ResourceClass::gpu, config_.gpu_pool_size};
+        resource_pools_["gpu"] = caf::actor_cast<caf::actor>(system_.spawn<PoolActorImpl>(gpu_config));
         
         // Create I/O pool
-        resource_pools_["io"] = system_.spawn<PoolActorImpl>(ResourceClass::io, config_.io_pool_size);
+        PoolConfig io_config{ResourceClass::io, config_.io_pool_size};
+        resource_pools_["io"] = caf::actor_cast<caf::actor>(system_.spawn<PoolActorImpl>(io_config));
     }
     
     ResourceClass determine_resource_class(const StepRequest& request) {
@@ -90,6 +95,7 @@ private:
     }
     
     caf::expected<void> check_tenant_quotas(const std::string& tenant_id, ResourceClass resource_class) {
+        (void)resource_class; // Mark as used to avoid unused parameter warning
         auto& usage = tenant_usage_[tenant_id];
         
         // Check memory quota

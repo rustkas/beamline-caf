@@ -1,4 +1,5 @@
 #include "beamline/worker/core.hpp"
+#include "beamline/worker/base_block_executor.hpp"
 #include <sqlite3.h>
 #include <chrono>
 #include <sstream>

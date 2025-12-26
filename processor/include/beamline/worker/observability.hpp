@@ -1,11 +1,11 @@
 #pragma once
 
 #include "beamline/worker/core.hpp"
-#include <prometheus/counter.h>
-#include <prometheus/gauge.h>
-#include <prometheus/histogram.h>
-#include <prometheus/registry.h>
-#include <opentelemetry/trace/tracer.h>
+// #include <prometheus/counter.h>
+// #include <prometheus/gauge.h>
+// #include <prometheus/histogram.h>
+// #include <prometheus/registry.h>
+// #include <opentelemetry/trace/tracer.h>
 #include <memory>
 #include <string>
 #include <thread>
@@ -64,8 +64,10 @@ public:
     void start_metrics_endpoint(const std::string& address, uint16_t port);
     void stop_metrics_endpoint();
     std::string get_metrics_response(); // Prometheus text format
+    std::string get_health_response(); // JSON health status
     
     // Tracing
+    /*
     std::unique_ptr<opentelemetry::trace::Span> start_step_span(
         const std::string& operation,
         const std::string& tenant_id,
@@ -74,6 +76,7 @@ public:
         const std::string& block_type,
         const std::string& trace_id
     );
+    */
     
     // Logging
     void log_info(const std::string& message,
@@ -126,7 +129,7 @@ public:
                                 const std::unordered_map<std::string, std::string>& context = {});
     
     // Prometheus registry access
-    std::shared_ptr<prometheus::Registry> registry() { return registry_; }
+    // std::shared_ptr<prometheus::Registry> registry() { return registry_; }
     
     // Health endpoint
     void start_health_endpoint(const std::string& address, uint16_t port);
@@ -134,6 +137,7 @@ public:
     
 private:
     std::string worker_id_;
+/*
     std::shared_ptr<prometheus::Registry> registry_;
     
     // Metrics (CP1 - legacy)
@@ -150,9 +154,10 @@ private:
     prometheus::Family<prometheus::Gauge>* queue_depth_family_;
     prometheus::Family<prometheus::Gauge>* active_tasks_family_;
     prometheus::Family<prometheus::Gauge>* health_status_family_;
+*/
     
     // Tracer
-    std::shared_ptr<opentelemetry::trace::Tracer> tracer_;
+    // std::shared_ptr<opentelemetry::trace::Tracer> tracer_;
     
     // Health endpoint
     std::thread health_server_thread_;
@@ -169,7 +174,6 @@ private:
     void initialize_tracing();
     void health_server_loop(int socket_fd);
     void metrics_server_loop(int socket_fd); // CP2 Wave 1 metrics endpoint
-    std::string get_health_response();
     std::string format_json_log(const std::string& level,
                                  const std::string& message,
                                  const std::string& tenant_id,

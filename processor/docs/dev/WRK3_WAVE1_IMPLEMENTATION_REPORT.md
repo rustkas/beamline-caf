@@ -229,8 +229,8 @@ Successfully implemented **CP2 Wave 1** requirements for CAF Worker Reliability 
 - `include/beamline/worker/timeout_enforcement.hpp` - Timeout enforcement utilities
 - `dashboards/worker-observability.json` - Grafana dashboard
 - `alerts/worker-alerts.yml` - Alerting rules
-- `docs/dev/WRK3_WAVE1_AUDIT.md` - Implementation audit
-- `docs/dev/WRK3_WAVE1_IMPLEMENTATION_REPORT.md` - This report
+- `docs/archive/dev/WRK3_WAVE1_AUDIT.md` - Implementation audit
+- `docs/archive/dev/WRK3_WAVE1_IMPLEMENTATION_REPORT.md` - This report
 
 ### Files Modified
 - `src/worker_actor.cpp` - Retry logic, queue management, metrics integration
@@ -390,9 +390,9 @@ export CP2_OBSERVABILITY_METRICS_ENABLED=true
 
 ## References
 
-- `docs/dev/CP2_WORKER_RELIABILITY_WAVE1.md` - Reliability Wave 1 specification
-- `docs/dev/CP2_OBSERVABILITY_WAVE1.md` - Observability Wave 1 specification
-- `docs/dev/WRK3_WAVE1_AUDIT.md` - Implementation audit
+- `docs/archive/dev/CP2_WORKER_RELIABILITY_WAVE1.md` - Reliability Wave 1 specification
+- `docs/archive/dev/CP2_OBSERVABILITY_WAVE1.md` - Observability Wave 1 specification
+- `docs/archive/dev/WRK3_WAVE1_AUDIT.md` - Implementation audit
 - `apps/caf/processor/docs/OBSERVABILITY.md` - Updated observability documentation
 
 ---

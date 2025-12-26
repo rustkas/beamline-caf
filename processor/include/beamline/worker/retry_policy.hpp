@@ -21,10 +21,16 @@ namespace worker {
 class RetryPolicy {
 public:
     struct Config {
-        int64_t base_delay_ms = 100;      // Base delay for exponential backoff
-        int64_t max_delay_ms = 5000;      // Maximum delay between retries
-        int64_t total_timeout_ms = 30000; // Total timeout across all retries
-        int32_t max_retries = 3;          // Maximum number of retries
+        int64_t base_delay_ms;
+        int64_t max_delay_ms;
+        int64_t total_timeout_ms;
+        int32_t max_retries;
+        
+        Config() 
+            : base_delay_ms(100), 
+              max_delay_ms(5000), 
+              total_timeout_ms(30000), 
+              max_retries(3) {}
     };
     
     RetryPolicy(const Config& config = Config()) : config_(config) {}

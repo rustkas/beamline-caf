@@ -116,7 +116,7 @@ This separation ensures:
   - ExecResult validation tests
   - Correlation fields preservation tests
 
-**Reference**: `docs/dev/WORKER_ROUTER_CONTRACT_TESTS.md`
+**Reference**: `docs/archive/dev/WORKER_ROUTER_CONTRACT_TESTS.md`
 
 ### 2. Core Functionality Tests
 
@@ -283,7 +283,7 @@ This separation ensures:
 - `docs/CP1_ACCEPTANCE_REPORT.md` - CP1 acceptance criteria and verification (see "Component Status" section)
 - `ARCHITECTURE_ROLE.md` - Worker architectural role and contracts
 - `docs/OBSERVABILITY_CP1_INVARIANTS.md` - CP1 observability invariants
-- `docs/dev/WORKER_ROUTER_CONTRACT_TESTS.md` - Contract tests documentation
+- `docs/archive/dev/WORKER_ROUTER_CONTRACT_TESTS.md` - Contract tests documentation
 - `docs/API_CONTRACTS.md` - Router ↔ Worker contracts
 - `docs/OBSERVABILITY.md` - General observability requirements
 

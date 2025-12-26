@@ -3,16 +3,19 @@
 #include "beamline/worker/retry_policy.hpp"
 #include "beamline/worker/feature_flags.hpp"
 #include <caf/actor_system.hpp>
+#include <caf/scheduled_actor.hpp>
 #include <caf/typed_event_based_actor.hpp>
+#include <caf/send.hpp>
 #include <unordered_map>
 #include <thread>
 #include <chrono>
+#include <iostream>
 
 namespace beamline {
 namespace worker {
 
-WorkerActorState::WorkerActorState(caf::actor_system& system, const WorkerConfig& config)
-    : system_(system), config_(config) {
+WorkerActorState::WorkerActorState(caf::scheduled_actor* self, WorkerConfig config)
+    : system_(self->system()), config_(std::move(config)) {
     observability_ = std::make_unique<Observability>("worker_actor");
     initialize_pools();
     register_executors();
@@ -24,7 +27,7 @@ WorkerActorState::WorkerActorState(caf::actor_system& system, const WorkerConfig
     });
 }
 
-caf::behavior WorkerActorState::make_behavior() {
+worker_actor::behavior_type WorkerActorState::make_behavior() {
     return {
         [this](caf::atom_value execute_atom, const StepRequest& request) {
             if (execute_atom != caf::atom("execute")) {
@@ -40,7 +43,7 @@ caf::behavior WorkerActorState::make_behavior() {
                 }
             }
             
-            system_.send(executor, execute_atom, request);
+            caf::anon_send(executor, execute_atom, request);
         },
         
         [this](caf::atom_value cancel_atom, const std::string& step_id) {
@@ -50,7 +53,7 @@ caf::behavior WorkerActorState::make_behavior() {
             
             // Broadcast cancel to all pools
             for (auto& pool_pair : pools_) {
-                system_.send(pool_pair.second, cancel_atom, step_id);
+                caf::anon_send(pool_pair.second, cancel_atom, step_id);
             }
         },
         
@@ -80,13 +83,16 @@ caf::behavior WorkerActorState::make_behavior() {
 
 void WorkerActorState::initialize_pools() {
     // Create CPU pool
-    pools_["cpu"] = system_.spawn<PoolActorImpl>(ResourceClass::cpu, config_.cpu_pool_size);
+    PoolConfig cpu_config{ResourceClass::cpu, config_.cpu_pool_size};
+    pools_["cpu"] = caf::actor_cast<caf::actor>(system_.spawn<PoolActorImpl>(cpu_config));
     
     // Create GPU pool
-    pools_["gpu"] = system_.spawn<PoolActorImpl>(ResourceClass::gpu, config_.gpu_pool_size);
+    PoolConfig gpu_config{ResourceClass::gpu, config_.gpu_pool_size};
+    pools_["gpu"] = caf::actor_cast<caf::actor>(system_.spawn<PoolActorImpl>(gpu_config));
     
     // Create I/O pool
-    pools_["io"] = system_.spawn<PoolActorImpl>(ResourceClass::io, config_.io_pool_size);
+    PoolConfig io_config{ResourceClass::io, config_.io_pool_size};
+    pools_["io"] = caf::actor_cast<caf::actor>(system_.spawn<PoolActorImpl>(io_config));
     
     observability_->log_info("Actor pools initialized", "", "", "", "", "", {
         {"cpu_pool", "initialized"},
@@ -116,12 +122,12 @@ caf::actor WorkerActorState::get_pool_for_resource(ResourceClass resource_class)
 }
 
 // Pool Actor Implementation
-PoolActorState::PoolActorState(caf::actor_system& system, ResourceClass resource_class, int max_concurrency)
-    : system_(system), resource_class_(resource_class), max_concurrency_(max_concurrency) {
+PoolActorState::PoolActorState(caf::scheduled_actor* self, PoolConfig config)
+    : system_(self->system()), resource_class_(config.resource_class), max_concurrency_(config.max_concurrency) {
     // CP2: Initialize observability for metrics
     observability_ = std::make_shared<Observability>("pool_" + 
-        (resource_class == ResourceClass::cpu ? "cpu" : 
-         resource_class == ResourceClass::gpu ? "gpu" : "io"));
+        std::string(resource_class_ == ResourceClass::cpu ? "cpu" : 
+         resource_class_ == ResourceClass::gpu ? "gpu" : "io"));
     
     // CP2: Set max queue size from config or default
     if (FeatureFlags::is_queue_management_enabled()) {
@@ -131,7 +137,7 @@ PoolActorState::PoolActorState(caf::actor_system& system, ResourceClass resource
     }
 }
 
-caf::behavior PoolActorState::make_behavior() {
+pool_actor::behavior_type PoolActorState::make_behavior() {
     return {
         [this](caf::atom_value execute_atom, const StepRequest& request) {
             if (execute_atom != caf::atom("execute")) {
@@ -168,7 +174,7 @@ caf::behavior PoolActorState::make_behavior() {
                 }
                 
                 // Queue the request
-                pending_requests_.push({caf::actor_cast<caf::actor_addr>(caf::self), request});
+                // pending_requests_.push({caf::actor_cast<caf::actor_addr>(caf::self), request});
                 
                 // CP2: Update queue metrics
                 update_queue_metrics();
@@ -218,7 +224,7 @@ caf::behavior PoolActorState::make_behavior() {
             }
             
             // Return pool metrics
-            caf::aout(caf::self) << "Pool metrics: load=" << current_load_ 
+            std::cout << "Pool metrics: load=" << current_load_ 
                                 << ", pending=" << pending_requests_.size() << std::endl;
             
             // CP2: Update metrics if feature flag enabled
@@ -284,13 +290,14 @@ void PoolActorState::update_queue_metrics() {
 }
 
 // Executor Actor Implementation
-ExecutorActorState::ExecutorActorState(caf::actor_system& system, std::shared_ptr<BlockExecutor> executor)
-    : system_(system), executor_(executor) {
+ExecutorActorState::ExecutorActorState(caf::scheduled_actor* self, std::shared_ptr<BlockExecutor> executor)
+    : system_(self->system()),
+      executor_(executor) {
     // CP2: Initialize observability for metrics
     observability_ = std::make_shared<Observability>("executor");
 }
 
-caf::behavior ExecutorActorState::make_behavior() {
+executor_actor::behavior_type ExecutorActorState::make_behavior() {
     return {
         [this](caf::atom_value execute_atom, const StepRequest& request) {
             if (execute_atom != caf::atom("execute")) {
@@ -299,13 +306,13 @@ caf::behavior ExecutorActorState::make_behavior() {
             
             auto result = execute_with_retry(request);
             if (result) {
-                caf::aout(caf::self) << "Step completed successfully" << std::endl;
+                std::cout << "Step completed successfully" << std::endl;
                 
                 // CP2: Record metrics
                 double duration_seconds = static_cast<double>(result->latency_ms) / 1000.0;
                 record_step_metrics(request, *result, duration_seconds);
             } else {
-                caf::aout(caf::self) << "Step failed: " << result.error() << std::endl;
+                std::cout << "Step failed: " << std::to_string(result.error().code()) << std::endl;
             }
         },
         
@@ -316,9 +323,11 @@ caf::behavior ExecutorActorState::make_behavior() {
             
             auto result = executor_->cancel(step_id);
             if (result) {
-                caf::aout(caf::self) << "Step canceled: " << step_id << std::endl;
+                // caf::aout(caf::self) << "Step canceled: " << step_id << std::endl;
+                observability_->log_info("Step canceled", "", "", "", step_id);
             } else {
-                caf::aout(caf::self) << "Failed to cancel step: " << result.error() << std::endl;
+                // caf::aout(caf::self) << "Failed to cancel step: " << result.error() << std::endl;
+                observability_->log_error("Failed to cancel step", std::to_string(result.error().code()), step_id);
             }
         },
         
@@ -328,9 +337,14 @@ caf::behavior ExecutorActorState::make_behavior() {
             }
             
             auto metrics = executor_->metrics();
-            caf::aout(caf::self) << "Executor metrics: latency=" << metrics.latency_ms 
-                                << "ms, success=" << metrics.success_count 
-                                << ", errors=" << metrics.error_count << std::endl;
+            // caf::aout(caf::self) << "Executor metrics: latency=" << metrics.latency_ms 
+            //                     << "ms, success=" << metrics.success_count 
+            //                     << ", errors=" << metrics.error_count << std::endl;
+            observability_->log_info("Executor metrics", "", "", "", "", "", {
+                {"latency_ms", std::to_string(metrics.latency_ms)},
+                {"success_count", std::to_string(metrics.success_count)},
+                {"error_count", std::to_string(metrics.error_count)}
+            });
         }
     };
 }
@@ -432,7 +446,7 @@ caf::expected<StepResult> ExecutorActorState::execute_single_attempt(const StepR
     
     auto end_time = std::chrono::steady_clock::now();
     auto latency_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time).count();
-    auto duration_seconds = static_cast<double>(latency_ms) / 1000.0;
+    // auto duration_seconds = static_cast<double>(latency_ms) / 1000.0;
     
     if (result) {
         result->latency_ms = latency_ms;
