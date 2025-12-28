@@ -40,6 +40,7 @@ endif()
 set(SOURCES
     src/main.cpp
     src/worker_actor.cpp
+    src/ingress_actor.cpp
     src/block_executor.cpp
     src/scheduler.cpp
     src/sandbox.cpp

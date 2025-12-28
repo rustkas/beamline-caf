@@ -37,6 +37,8 @@ private:
     void initialize_pools();
     void register_executors();
     caf::actor get_pool_for_resource(ResourceClass resource_class);
+
+    caf::scheduled_actor* self_ = nullptr;
 };
 
 class WorkerActorImpl : public caf::typed_event_based_actor<
@@ -99,6 +101,11 @@ private:
     void process_pending();
     size_t get_queue_depth() const;
     void update_queue_metrics(); // CP2: Update queue depth and active tasks metrics
+    
+    std::shared_ptr<BlockExecutor> create_block_executor(const std::string& type);
+    void execute_step(const StepRequest& request, caf::actor_addr requester);
+    
+    caf::scheduled_actor* self_ = nullptr;
 };
 
 class PoolActorImpl : public caf::typed_event_based_actor<
@@ -124,7 +131,7 @@ private:
 
 // Block executor actor
 using executor_actor = caf::typed_actor<
-    caf::reacts_to<caf::atom_value, StepRequest>, // execute step
+    caf::reacts_to<caf::atom_value, StepRequest, caf::actor>, // execute step with reply-to pool (generic actor)
     caf::reacts_to<caf::atom_value, std::string>, // cancel step
     caf::reacts_to<caf::atom_value> // get executor metrics
 >;
@@ -144,17 +151,19 @@ private:
     caf::expected<StepResult> execute_with_retry(const StepRequest& req);
     caf::expected<StepResult> execute_single_attempt(const StepRequest& req);
     void record_step_metrics(const StepRequest& req, const StepResult& result, double duration_seconds); // CP2: Record metrics
+
+    caf::scheduled_actor* self_ = nullptr;
 };
 
 class ExecutorActorImpl : public caf::typed_event_based_actor<
-    caf::reacts_to<caf::atom_value, StepRequest>,
+    caf::reacts_to<caf::atom_value, StepRequest, caf::actor>,
     caf::reacts_to<caf::atom_value, std::string>,
     caf::reacts_to<caf::atom_value>
 > {
 public:
     ExecutorActorImpl(caf::actor_config& cfg, std::shared_ptr<BlockExecutor> executor)
         : caf::typed_event_based_actor<
-            caf::reacts_to<caf::atom_value, StepRequest>,
+            caf::reacts_to<caf::atom_value, StepRequest, caf::actor>,
             caf::reacts_to<caf::atom_value, std::string>,
             caf::reacts_to<caf::atom_value>
           >(cfg),

@@ -1,9 +1,12 @@
 #include "beamline/worker/actors.hpp"
 #include "beamline/worker/observability.hpp"
+#include "beamline/worker/blocks/http_block.hpp"
+#include "beamline/worker/blocks/fs_block.hpp"
 #include "beamline/worker/retry_policy.hpp"
 #include "beamline/worker/feature_flags.hpp"
 #include <caf/actor_system.hpp>
 #include <caf/scheduled_actor.hpp>
+#include <caf/local_actor.hpp> // Added for send
 #include <caf/typed_event_based_actor.hpp>
 #include <caf/send.hpp>
 #include <unordered_map>
@@ -15,7 +18,7 @@ namespace beamline {
 namespace worker {
 
 WorkerActorState::WorkerActorState(caf::scheduled_actor* self, WorkerConfig config)
-    : system_(self->system()), config_(std::move(config)) {
+    : system_(self->system()), config_(std::move(config)), self_(self) {
     observability_ = std::make_unique<Observability>("worker_actor");
     initialize_pools();
     register_executors();
@@ -43,7 +46,7 @@ worker_actor::behavior_type WorkerActorState::make_behavior() {
                 }
             }
             
-            caf::anon_send(executor, execute_atom, request);
+            self_->delegate(executor, execute_atom, request);
         },
         
         [this](caf::atom_value cancel_atom, const std::string& step_id) {
@@ -123,7 +126,7 @@ caf::actor WorkerActorState::get_pool_for_resource(ResourceClass resource_class)
 
 // Pool Actor Implementation
 PoolActorState::PoolActorState(caf::scheduled_actor* self, PoolConfig config)
-    : system_(self->system()), resource_class_(config.resource_class), max_concurrency_(config.max_concurrency) {
+    : system_(self->system()), resource_class_(config.resource_class), max_concurrency_(config.max_concurrency), self_(self) {
     // CP2: Initialize observability for metrics
     observability_ = std::make_shared<Observability>("pool_" + 
         std::string(resource_class_ == ResourceClass::cpu ? "cpu" : 
@@ -174,7 +177,7 @@ pool_actor::behavior_type PoolActorState::make_behavior() {
                 }
                 
                 // Queue the request
-                // pending_requests_.push({caf::actor_cast<caf::actor_addr>(caf::self), request});
+                pending_requests_.push({caf::actor_cast<caf::actor_addr>(self_->current_sender()), request});
                 
                 // CP2: Update queue metrics
                 update_queue_metrics();
@@ -183,16 +186,13 @@ pool_actor::behavior_type PoolActorState::make_behavior() {
             
             // Execute immediately
             current_load_++;
-            // Executor actor creation is handled by pool actor implementation
-            // The request is queued and will be processed by process_pending()
             
             observability_->log_info("Step execution started", "", "", "", request.type, "", {
                 {"resource_class", resource_class_ == ResourceClass::cpu ? "cpu" : 
                                   resource_class_ == ResourceClass::gpu ? "gpu" : "io"}
             });
             
-            // Process pending requests if capacity available
-            process_pending();
+            execute_step(request, caf::actor_cast<caf::actor_addr>(self_->current_sender()));
             
             // CP2: Update active tasks metric
             update_queue_metrics();
@@ -218,18 +218,26 @@ pool_actor::behavior_type PoolActorState::make_behavior() {
             observability_->log_info("Step cancellation requested", "", "", "", step_id);
         },
         
-        [this](caf::atom_value metrics_atom) {
-            if (metrics_atom != caf::atom("metrics")) {
-                return;
-            }
-            
-            // Return pool metrics
-            std::cout << "Pool metrics: load=" << current_load_ 
-                                << ", pending=" << pending_requests_.size() << std::endl;
-            
-            // CP2: Update metrics if feature flag enabled
-            if (FeatureFlags::is_observability_metrics_enabled()) {
+        [this](caf::atom_value atom) {
+            if (atom == caf::atom("metrics")) {
+                // Return pool metrics
+                std::cout << "Pool metrics: load=" << current_load_ 
+                                    << ", pending=" << pending_requests_.size() << std::endl;
+                
+                // CP2: Update metrics if feature flag enabled
+                if (FeatureFlags::is_observability_metrics_enabled()) {
+                    update_queue_metrics();
+                }
+            } else if (atom == caf::atom("done")) {
+                if (current_load_ > 0) {
+                    current_load_--;
+                }
+                
+                // CP2: Update active tasks metric
                 update_queue_metrics();
+                
+                // Process next pending request if any
+                process_pending();
             }
         }
     };
@@ -252,8 +260,8 @@ void PoolActorState::process_pending() {
             {"queue_depth", std::to_string(pending_requests_.size())}
         });
         
-        // Send request back to requester for execution
-        caf::anon_send(caf::actor_cast<caf::actor>(requester), caf::atom("execute"), request);
+        // Execute the queued request
+        execute_step(request, requester);
         
         // CP2: Update queue metrics after processing
         update_queue_metrics();
@@ -289,17 +297,55 @@ void PoolActorState::update_queue_metrics() {
     observability_->set_active_tasks(resource_pool, static_cast<int64_t>(current_load_));
 }
 
+std::shared_ptr<BlockExecutor> PoolActorState::create_block_executor(const std::string& type) {
+    if (type == "http.request") {
+        return std::make_shared<HttpBlockExecutor>();
+    } else if (type == "fs.blob_put") {
+        return std::make_shared<FsBlockExecutor>();
+    } else if (type == "fs.blob_get") {
+        return std::make_shared<FsGetBlockExecutor>();
+    }
+    // Default fallback or error
+    // For now returning nullptr which will be checked
+    return nullptr;
+}
+
+void PoolActorState::execute_step(const StepRequest& request, caf::actor_addr /*requester*/) {
+    auto executor = create_block_executor(request.type);
+    if (!executor) {
+        observability_->log_error("Unknown block type", request.type);
+        // In a real system we should notify the requester of the error
+        // For now, we just drop it and ensure we don't leak load count
+        current_load_--;
+        process_pending();
+        return;
+    }
+    
+    // Create executor actor
+    // Note: In a production system we might want to pool these actors too
+    // instead of spawning one per request.
+    auto executor_actor = system_.spawn<ExecutorActorImpl>(executor);
+    
+    // Send execute request
+    // We use anon_send here but include the pool actor (self) as an argument
+    // so the executor knows who to reply to.
+    // Casting self_ to caf::actor handle ensures compatibility with executor interface.
+    caf::anon_send(executor_actor, caf::atom("execute"), request, caf::actor_cast<caf::actor>(self_));
+}
+
 // Executor Actor Implementation
 ExecutorActorState::ExecutorActorState(caf::scheduled_actor* self, std::shared_ptr<BlockExecutor> executor)
     : system_(self->system()),
-      executor_(executor) {
+      executor_(executor),
+      self_(self) {
     // CP2: Initialize observability for metrics
     observability_ = std::make_shared<Observability>("executor");
 }
 
 executor_actor::behavior_type ExecutorActorState::make_behavior() {
     return {
-        [this](caf::atom_value execute_atom, const StepRequest& request) {
+        
+        [this](caf::atom_value execute_atom, const StepRequest& request, caf::actor pool) {
             if (execute_atom != caf::atom("execute")) {
                 return;
             }
@@ -314,7 +360,14 @@ executor_actor::behavior_type ExecutorActorState::make_behavior() {
             } else {
                 std::cout << "Step failed: " << std::to_string(result.error().code()) << std::endl;
             }
+            
+            // Notify pool that we are done
+            caf::anon_send(pool, caf::atom("done"));
+            
+            // Executor is one-shot, so we quit
+            self_->quit();
         },
+        
         
         [this](caf::atom_value cancel_atom, const std::string& step_id) {
             if (cancel_atom != caf::atom("cancel")) {

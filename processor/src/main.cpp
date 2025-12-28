@@ -5,6 +5,7 @@
 #include <caf/openssl/manager.hpp>
 #include "beamline/worker/core.hpp"
 #include "beamline/worker/actors.hpp"
+#include "beamline/worker/ingress_actor.hpp"
 #include "beamline/worker/observability.hpp"
 #include <unistd.h>
 
@@ -71,7 +72,10 @@ void caf_main(caf::actor_system& system, const WorkerConfig& config) {
         
         // Create worker actor
         // Actor is kept alive by the actor system, no need to store reference
-        [[maybe_unused]] auto worker_actor = system.spawn<beamline::worker::WorkerActor>(config.worker_config);
+        auto worker_actor = system.spawn<beamline::worker::WorkerActor>(config.worker_config);
+        
+        // Create ingress actor
+        system.spawn<beamline::worker::ingress_actor>(config.worker_config.nats_url, caf::actor_cast<caf::actor>(worker_actor));
         
         // Keep the system running
         observability->log_info("Worker CAF runtime is running. Press Enter to exit...", "", "", "", "", "", {});
@@ -100,8 +104,9 @@ int main(int argc, char** argv) {
         return 1;
     }
     
-    // Run the worker
-    caf::actor_system system{config};
+    // Run the actor system
+    caf::actor_system system(config);
     caf_main(system, config);
+    
     return 0;
 }
