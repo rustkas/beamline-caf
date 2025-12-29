@@ -48,3 +48,6 @@ coverage.xml
 .DS_Store
 *.log
 *.tmp
+
+.ai/
+
